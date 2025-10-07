@@ -15,6 +15,37 @@ FlowMind provides a multilingual chatbot management stack. The FastAPI backend o
        └─ chatterbot_ext.manager handles training + confidence gating
 ```
 
+## Database Schema
+FlowMind stores chatbot configuration in SQLAlchemy models defined under `app/models/bot.py`. Cascading deletes keep child records in sync when a project or intent is removed.
+
+```
+bot_projects
+  |- intents
+  |   |- intent_training_phrases
+  |   |- intent_responses
+  |   |- intent_fulfillments
+  |   |- intent_branches
+  |   |- intent_input_contexts
+  |   |- intent_output_contexts
+  |   \- intent_fallbacks
+  \- bot_fallbacks
+```
+
+| Table | Primary Fields | Notes |
+| --- | --- | --- |
+| `bot_projects` | `name` (unique), `supported_languages` JSON, `default_language`, `confidence_threshold`, timestamps | Root entity; deleting a project cascades to intents and project fallbacks. |
+| `intents` | `project_id` FK, optional `parent_intent_id`, flags (`is_active`, `is_fallback`, `is_default_welcome`) | Supports hierarchical flows, default welcome intents, and project-scoped uniqueness on `name`. |
+| `intent_training_phrases` | `intent_id` FK, `language`, `text` | Stores localized training utterances; `language` is indexed for fast lookups. |
+| `intent_responses` | `intent_id` FK, `language`, `text`, `response_type`, JSON `payload`, `is_rich_content` | Supports multi-language responses plus structured payloads (cards, API output). |
+| `intent_fulfillments` | `intent_id` unique FK, `enabled`, webhook URL/method, headers, payload template | One-to-one webhook execution settings with timeout control. |
+| `intent_branches` | `intent_id` FK, `expression`, `true_intent_id`, `false_intent_id` | Evaluates expressions to route to follow-up intents. |
+| `intent_input_contexts` | `intent_id` FK, `name` (unique per intent) | Declares contexts required to match an intent. |
+| `intent_output_contexts` | `intent_id` FK, `name` (unique per intent), `lifespan_turns` | Emits contexts with configurable lifespan after response. |
+| `bot_fallbacks` | `project_id` FK, `language`, serialized fallback body, timestamps | Project-level fallback message per locale with sanitized rich content parts. |
+| `intent_fallbacks` | `intent_id` FK, `language`, serialized fallback body, timestamps | Intent-specific fallback override per locale. |
+
+Fallback content is stored as JSON-encoded text; helper methods sanitize nested rich content parts before persistence.
+
 ## Repository Layout
 - `app/main.py` wires routers, startup hooks, and health checks
 - `app/core/config.py` centralizes Pydantic settings (`CHATBOT_DATABASE_URL`, data dirs)
