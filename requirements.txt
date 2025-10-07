@@ -1,0 +1,11 @@
+fastapi
+uvicorn
+sqlalchemy
+pydantic
+pydantic-settings
+alembic
+chatterbot
+langdetect
+httpx
+jmespath
+httpx
